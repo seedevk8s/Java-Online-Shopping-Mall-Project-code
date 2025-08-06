@@ -1,276 +1,358 @@
 package javaproject.util;
 
-
-import javaproject.exception.FileIOException;
-
+import javaproject.domain.*;
+import javaproject.repository.*;
 import java.io.*;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.ArrayList;
 
 /**
- * 파일 입출력을 담당하는 유틸리티 클래스
- * 모든 Repository에서 공통으로 사용
+ * 파일 관리 유틸리티 클래스
+ * 싱글톤 패턴을 적용하여 하나의 인스턴스만 생성
+ * 데이터의 파일 저장 및 로드 기능 제공
+ *
+ * @author ShoppingMall Team
+ * @version 1.0
  */
 public class FileManager {
 
-    // 데이터 파일들이 저장될 기본 디렉토리
-    private static final String DATA_DIRECTORY = "data";
+    // 싱글톤 인스턴스
+    private static final FileManager instance = new FileManager();
 
-    // 파일 인코딩 (한글 지원)
-    private static final String FILE_ENCODING = "UTF-8";
+    // 데이터 저장 디렉토리
+    private static final String DATA_DIR = "data";
+
+    // 파일 경로 상수들
+    private static final String USER_FILE = DATA_DIR + "/users.dat";
+    private static final String PRODUCT_FILE = DATA_DIR + "/products.dat";
+    private static final String ORDER_FILE = DATA_DIR + "/orders.dat";
+    private static final String ORDER_ITEM_FILE = DATA_DIR + "/order_items.dat";
+    private static final String CART_FILE = DATA_DIR + "/carts.dat";
+
+    // Repository 인스턴스들
+    private final UserRepository userRepository;
+    private final ProductRepository productRepository;
+    private final OrderRepository orderRepository;
+    private final OrderItemRepository orderItemRepository;
+    private final CartRepository cartRepository;
 
     /**
-     * 데이터 디렉토리 초기화
-     * 프로그램 시작 시 호출하여 data 폴더 생성
+     * private 생성자 - 싱글톤 패턴 구현
      */
-    public static void initializeDataDirectory() {
-        try {
-            Path dataPath = Paths.get(DATA_DIRECTORY);
-            if (!Files.exists(dataPath)) {
-                Files.createDirectories(dataPath); // data 폴더 생성
-                System.out.println("데이터 디렉토리가 생성되었습니다: " + DATA_DIRECTORY);
+    private FileManager() {
+        this.userRepository = UserRepository.getInstance();
+        this.productRepository = ProductRepository.getInstance();
+        this.orderRepository = OrderRepository.getInstance();
+        this.orderItemRepository = OrderItemRepository.getInstance();
+        this.cartRepository = CartRepository.getInstance();
+    }
+
+    /**
+     * 싱글톤 인스턴스 반환
+     * @return FileManager의 유일한 인스턴스
+     */
+    public static FileManager getInstance() {
+        return instance;
+    }
+
+    /**
+     * 데이터 디렉토리 생성 (없는 경우)
+     */
+    public void createDataDirectoryIfNotExists() {
+        File dataDir = new File(DATA_DIR);
+        if (!dataDir.exists()) {
+            if (dataDir.mkdirs()) {
+                System.out.println("📁 데이터 디렉토리 생성: " + DATA_DIR);
             }
+        }
+    }
+
+    // ===== 사용자 데이터 =====
+
+    /**
+     * 사용자 데이터 저장
+     */
+    public void saveUsers() {
+        List<User> users = userRepository.findAll();
+        saveToFile(USER_FILE, users);
+    }
+
+    /**
+     * 사용자 데이터 로드
+     * @return 로드된 사용자 수
+     */
+    @SuppressWarnings("unchecked")
+    public int loadUsers() {
+        List<User> users = (List<User>) loadFromFile(USER_FILE);
+        if (users != null) {
+            for (User user : users) {
+                userRepository.save(user);
+            }
+            return users.size();
+        }
+        return 0;
+    }
+
+    // ===== 상품 데이터 =====
+
+    /**
+     * 상품 데이터 저장
+     */
+    public void saveProducts() {
+        List<Product> products = productRepository.findAll();
+        saveToFile(PRODUCT_FILE, products);
+    }
+
+    /**
+     * 상품 데이터 로드
+     * @return 로드된 상품 수
+     */
+    @SuppressWarnings("unchecked")
+    public int loadProducts() {
+        List<Product> products = (List<Product>) loadFromFile(PRODUCT_FILE);
+        if (products != null) {
+            for (Product product : products) {
+                productRepository.save(product);
+            }
+            return products.size();
+        }
+        return 0;
+    }
+
+    // ===== 주문 데이터 =====
+
+    /**
+     * 주문 데이터 저장
+     */
+    public void saveOrders() {
+        List<Order> orders = orderRepository.findAll();
+        saveToFile(ORDER_FILE, orders);
+
+        // 주문 항목도 함께 저장
+        List<OrderItem> allItems = new ArrayList<>();
+        for (Order order : orders) {
+            if (order.getItems() != null) {
+                allItems.addAll(order.getItems());
+            }
+        }
+        saveToFile(ORDER_ITEM_FILE, allItems);
+    }
+
+    /**
+     * 주문 데이터 로드
+     * @return 로드된 주문 수
+     */
+    @SuppressWarnings("unchecked")
+    public int loadOrders() {
+        // 먼저 주문 항목 로드
+        List<OrderItem> items = (List<OrderItem>) loadFromFile(ORDER_ITEM_FILE);
+        if (items != null) {
+            for (OrderItem item : items) {
+                orderItemRepository.save(item);
+            }
+        }
+
+        // 주문 로드
+        List<Order> orders = (List<Order>) loadFromFile(ORDER_FILE);
+        if (orders != null) {
+            for (Order order : orders) {
+                // 주문 항목 연결
+                List<OrderItem> orderItems = orderItemRepository.findByOrderId(order.getId());
+                order.setItems(orderItems);
+                orderRepository.save(order);
+            }
+            return orders.size();
+        }
+        return 0;
+    }
+
+    // ===== 장바구니 데이터 =====
+
+    /**
+     * 장바구니 데이터 저장
+     */
+    public void saveCarts() {
+        List<Cart> carts = cartRepository.findAll();
+        saveToFile(CART_FILE, carts);
+    }
+
+    /**
+     * 장바구니 데이터 로드
+     * @return 로드된 장바구니 수
+     */
+    @SuppressWarnings("unchecked")
+    public int loadCarts() {
+        List<Cart> carts = (List<Cart>) loadFromFile(CART_FILE);
+        if (carts != null) {
+            for (Cart cart : carts) {
+                cartRepository.save(cart);
+            }
+            return carts.size();
+        }
+        return 0;
+    }
+
+    // ===== 파일 입출력 헬퍼 메서드 =====
+
+    /**
+     * 객체를 파일에 저장
+     *
+     * @param filename 파일명
+     * @param data 저장할 데이터
+     */
+    private void saveToFile(String filename, Object data) {
+        try (ObjectOutputStream oos = new ObjectOutputStream(
+                new FileOutputStream(filename))) {
+            oos.writeObject(data);
         } catch (IOException e) {
-            System.err.println("데이터 디렉토리 생성 실패: " + e.getMessage());
+            System.err.println("파일 저장 실패 (" + filename + "): " + e.getMessage());
         }
     }
 
     /**
-     * 파일 경로 생성 (data 폴더 포함)
-     * @param fileName 파일명
-     * @return 전체 파일 경로
+     * 파일에서 객체 로드
+     *
+     * @param filename 파일명
+     * @return 로드된 객체
      */
-    public static String getFilePath(String fileName) {
-        return DATA_DIRECTORY + File.separator + fileName;
+    private Object loadFromFile(String filename) {
+        File file = new File(filename);
+        if (!file.exists()) {
+            return null;
+        }
+
+        try (ObjectInputStream ois = new ObjectInputStream(
+                new FileInputStream(filename))) {
+            return ois.readObject();
+        } catch (IOException | ClassNotFoundException e) {
+            System.err.println("파일 로드 실패 (" + filename + "): " + e.getMessage());
+            return null;
+        }
     }
 
     /**
-     * 파일에 문자열 목록을 한 줄씩 저장
-     * @param fileName 파일명 (확장자 포함)
-     * @param lines 저장할 문자열 목록
-     * @throws FileIOException 파일 저장 실패 시
+     * 모든 데이터 저장
      */
-    public static void writeLines(String fileName, List<String> lines) throws FileIOException {
-        String filePath = getFilePath(fileName);
+    public void saveAllData() {
+        createDataDirectoryIfNotExists();
+        saveUsers();
+        saveProducts();
+        saveOrders();
+        saveCarts();
+    }
 
-        try (BufferedWriter writer = new BufferedWriter(
-                new OutputStreamWriter(new FileOutputStream(filePath), FILE_ENCODING))) {
+    /**
+     * 모든 데이터 로드
+     *
+     * @return 로드 성공 여부
+     */
+    public boolean loadAllData() {
+        createDataDirectoryIfNotExists();
 
-            // 각 줄을 파일에 쓰기
-            for (String line : lines) {
-                writer.write(line);
-                writer.newLine(); // 줄바꿈 추가
+        int userCount = loadUsers();
+        int productCount = loadProducts();
+        int orderCount = loadOrders();
+        int cartCount = loadCarts();
+
+        System.out.println("📊 데이터 로드 완료:");
+        System.out.println("  - 사용자: " + userCount + "명");
+        System.out.println("  - 상품: " + productCount + "개");
+        System.out.println("  - 주문: " + orderCount + "건");
+        System.out.println("  - 장바구니: " + cartCount + "개");
+
+        return true;
+    }
+
+    /**
+     * 백업 파일 생성
+     *
+     * @param suffix 백업 파일 접미사
+     */
+    public void createBackup(String suffix) {
+        createDataDirectoryIfNotExists();
+
+        // 백업 디렉토리 생성
+        String backupDir = DATA_DIR + "/backup_" + suffix;
+        File dir = new File(backupDir);
+        if (!dir.exists()) {
+            dir.mkdirs();
+        }
+
+        // 각 파일 백업
+        copyFile(USER_FILE, backupDir + "/users.dat");
+        copyFile(PRODUCT_FILE, backupDir + "/products.dat");
+        copyFile(ORDER_FILE, backupDir + "/orders.dat");
+        copyFile(ORDER_ITEM_FILE, backupDir + "/order_items.dat");
+        copyFile(CART_FILE, backupDir + "/carts.dat");
+
+        System.out.println("✅ 백업 완료: " + backupDir);
+    }
+
+    /**
+     * 파일 복사
+     *
+     * @param source 원본 파일
+     * @param destination 대상 파일
+     */
+    private void copyFile(String source, String destination) {
+        File srcFile = new File(source);
+        if (!srcFile.exists()) {
+            return;
+        }
+
+        try (FileInputStream fis = new FileInputStream(source);
+             FileOutputStream fos = new FileOutputStream(destination)) {
+
+            byte[] buffer = new byte[1024];
+            int length;
+            while ((length = fis.read(buffer)) > 0) {
+                fos.write(buffer, 0, length);
             }
 
         } catch (IOException e) {
-            throw new FileIOException(filePath, "파일 저장 중 오류가 발생했습니다.", e);
+            System.err.println("파일 복사 실패: " + e.getMessage());
         }
     }
 
     /**
-     * 파일에서 모든 줄을 읽어서 문자열 목록으로 반환
-     * @param fileName 파일명 (확장자 포함)
-     * @return 읽은 문자열 목록
-     * @throws FileIOException 파일 읽기 실패 시
+     * 데이터 초기화 (모든 파일 삭제)
+     * 주의: 이 메서드는 모든 데이터를 삭제합니다!
      */
-    public static List<String> readLines(String fileName) throws FileIOException {
-        String filePath = getFilePath(fileName);
-        List<String> lines = new ArrayList<>();
-
-        // 파일이 존재하지 않으면 빈 목록 반환
-        if (!fileExists(fileName)) {
-            return lines;
-        }
-
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(new FileInputStream(filePath), FILE_ENCODING))) {
-
-            String line;
-            while ((line = reader.readLine()) != null) {
-                // 빈 줄이 아닌 경우에만 추가
-                if (!line.trim().isEmpty()) {
-                    lines.add(line);
+    public void clearAllData() {
+        File dataDir = new File(DATA_DIR);
+        if (dataDir.exists()) {
+            File[] files = dataDir.listFiles();
+            if (files != null) {
+                for (File file : files) {
+                    if (file.isFile() && file.getName().endsWith(".dat")) {
+                        file.delete();
+                    }
                 }
             }
-
-        } catch (IOException e) {
-            throw new FileIOException(filePath, "파일 읽기 중 오류가 발생했습니다.", e);
         }
-
-        return lines;
-    }
-
-    /**
-     * 파일에 단일 문자열 줄 추가 (append 모드)
-     * @param fileName 파일명
-     * @param line 추가할 문자열
-     * @throws FileIOException 파일 저장 실패 시
-     */
-    public static void appendLine(String fileName, String line) throws FileIOException {
-        String filePath = getFilePath(fileName);
-
-        try (BufferedWriter writer = new BufferedWriter(
-                new OutputStreamWriter(new FileOutputStream(filePath, true), FILE_ENCODING))) {
-
-            writer.write(line);
-            writer.newLine();
-
-        } catch (IOException e) {
-            throw new FileIOException(filePath, "파일 추가 저장 중 오류가 발생했습니다.", e);
-        }
+        System.out.println("⚠️ 모든 데이터가 초기화되었습니다.");
     }
 
     /**
      * 파일 존재 여부 확인
-     * @param fileName 파일명
+     *
+     * @param filename 파일명
      * @return 파일이 존재하면 true
      */
-    public static boolean fileExists(String fileName) {
-        String filePath = getFilePath(fileName);
-        File file = new File(filePath);
-        return file.exists() && file.isFile();
+    public boolean fileExists(String filename) {
+        File file = new File(filename);
+        return file.exists();
     }
 
     /**
-     * 파일 삭제
-     * @param fileName 삭제할 파일명
-     * @return 삭제 성공 여부
+     * 데이터 파일이 하나라도 존재하는지 확인
+     *
+     * @return 데이터 파일이 존재하면 true
      */
-    public static boolean deleteFile(String fileName) {
-        String filePath = getFilePath(fileName);
-        File file = new File(filePath);
-
-        if (file.exists()) {
-            return file.delete();
-        }
-        return false; // 파일이 존재하지 않음
-    }
-
-    /**
-     * 파일 크기 조회 (줄 수)
-     * @param fileName 파일명
-     * @return 파일의 줄 수
-     * @throws FileIOException 파일 읽기 실패 시
-     */
-    public static long getLineCount(String fileName) throws FileIOException {
-        List<String> lines = readLines(fileName);
-        return lines.size();
-    }
-
-    /**
-     * 파일 백업 생성
-     * @param fileName 백업할 파일명
-     * @return 백업 성공 여부
-     */
-    public static boolean backupFile(String fileName) {
-        if (!fileExists(fileName)) {
-            return false; // 원본 파일이 없음
-        }
-
-        try {
-            // 백업 파일명 생성 (원본파일명_backup.확장자)
-            String backupFileName = generateBackupFileName(fileName);
-            List<String> lines = readLines(fileName);
-            writeLines(backupFileName, lines);
-
-            System.out.println("파일 백업 완료: " + fileName + " -> " + backupFileName);
-            return true;
-
-        } catch (FileIOException e) {
-            System.err.println("파일 백업 실패: " + e.getMessage());
-            return false;
-        }
-    }
-
-    /**
-     * 백업 파일명 생성
-     * @param originalFileName 원본 파일명
-     * @return 백업 파일명
-     */
-    private static String generateBackupFileName(String originalFileName) {
-        int dotIndex = originalFileName.lastIndexOf('.');
-        if (dotIndex == -1) {
-            // 확장자가 없는 경우
-            return originalFileName + "_backup";
-        } else {
-            // 확장자가 있는 경우
-            String nameWithoutExt = originalFileName.substring(0, dotIndex);
-            String extension = originalFileName.substring(dotIndex);
-            return nameWithoutExt + "_backup" + extension;
-        }
-    }
-
-    /**
-     * 파일 내용을 특정 조건으로 필터링하여 새 파일로 저장
-     * @param sourceFileName 원본 파일명
-     * @param targetFileName 대상 파일명
-     * @param filterFunction 필터링 함수 (String -> boolean)
-     * @throws FileIOException 파일 처리 실패 시
-     */
-    public static void filterAndSave(String sourceFileName, String targetFileName,
-                                     java.util.function.Predicate<String> filterFunction) throws FileIOException {
-        List<String> sourceLines = readLines(sourceFileName);
-        List<String> filteredLines = new ArrayList<>();
-
-        // 조건에 맞는 줄만 필터링
-        for (String line : sourceLines) {
-            if (filterFunction.test(line)) {
-                filteredLines.add(line);
-            }
-        }
-
-        // 필터링된 결과를 새 파일에 저장
-        writeLines(targetFileName, filteredLines);
-    }
-
-    /**
-     * 여러 파일을 하나로 합치기
-     * @param sourceFileNames 합칠 파일명들
-     * @param targetFileName 결과 파일명
-     * @throws FileIOException 파일 처리 실패 시
-     */
-    public static void mergeFiles(List<String> sourceFileNames, String targetFileName) throws FileIOException {
-        List<String> allLines = new ArrayList<>();
-
-        // 각 파일의 내용을 순서대로 읽어서 합치기
-        for (String sourceFileName : sourceFileNames) {
-            if (fileExists(sourceFileName)) {
-                List<String> lines = readLines(sourceFileName);
-                allLines.addAll(lines);
-            }
-        }
-
-        // 합친 내용을 새 파일에 저장
-        writeLines(targetFileName, allLines);
-    }
-
-    /**
-     * 파일 정보 출력 (디버깅용)
-     * @param fileName 파일명
-     */
-    public static void printFileInfo(String fileName) {
-        String filePath = getFilePath(fileName);
-        File file = new File(filePath);
-
-        System.out.println("=== 파일 정보 ===");
-        System.out.println("파일명: " + fileName);
-        System.out.println("전체 경로: " + filePath);
-        System.out.println("존재 여부: " + file.exists());
-
-        if (file.exists()) {
-            System.out.println("파일 크기: " + file.length() + " bytes");
-            System.out.println("마지막 수정: " + new java.util.Date(file.lastModified()));
-
-            try {
-                long lineCount = getLineCount(fileName);
-                System.out.println("줄 수: " + lineCount);
-            } catch (FileIOException e) {
-                System.out.println("줄 수 조회 실패: " + e.getMessage());
-            }
-        }
-        System.out.println("================");
+    public boolean hasDataFiles() {
+        return fileExists(USER_FILE) ||
+                fileExists(PRODUCT_FILE) ||
+                fileExists(ORDER_FILE) ||
+                fileExists(CART_FILE);
     }
 }

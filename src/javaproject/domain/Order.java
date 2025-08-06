@@ -1,327 +1,451 @@
 package javaproject.domain;
 
+import java.io.Serializable;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
- * 주문 정보를 담는 도메인 클래스
- * 사용자의 주문 내역과 상태를 관리
+ * 주문 도메인 클래스
+ * 사용자의 주문 정보를 표현
+ *
+ * @author ShoppingMall Team
+ * @version 1.0
  */
-public class Order {
-    // 주문 고유 ID
-    private String orderId;
+public class Order implements Serializable {
+
+    // 직렬화 버전 UID
+    private static final long serialVersionUID = 1L;
+
+    // 주문 ID (고유 식별자)
+    private String id;
 
     // 주문한 사용자 ID
     private String userId;
 
-    // 주문 상품 목록
-    private List<OrderItem> orderItems;
-
-    // 총 주문 금액
-    private int totalAmount;
-
-    // 배송 주소
-    private String deliveryAddress;
-
-    // 연락처
-    private String phoneNumber;
-
-    // 주문 상태 (PENDING, CONFIRMED, SHIPPED, DELIVERED, CANCELLED)
-    private OrderStatus status;
-
     // 주문 일시
     private LocalDateTime orderDate;
 
-    // 주문 ID 자동 생성을 위한 카운터
-    private static int orderCounter = 1;
+    // 주문 상태
+    private OrderStatus status;
 
-    /**
-     * 주문 상태를 나타내는 열거형
-     */
-    public enum OrderStatus {
-        PENDING("주문접수"),      // 주문 접수됨
-        CONFIRMED("주문확인"),    // 주문 확인됨
-        SHIPPED("배송중"),       // 배송 시작
-        DELIVERED("배송완료"),   // 배송 완료
-        CANCELLED("주문취소");   // 주문 취소됨
+    // 주문 항목 목록
+    private List<OrderItem> items;
 
-        private final String description;
+    // 총 금액
+    private double totalAmount;
 
-        OrderStatus(String description) {
-            this.description = description;
-        }
+    // 배송 주소
+    private String shippingAddress;
 
-        public String getDescription() {
-            return description;
-        }
-    }
+    // 결제 일시
+    private LocalDateTime paymentDate;
+
+    // 배송 시작일
+    private LocalDateTime shippingDate;
+
+    // 배송 완료일
+    private LocalDateTime deliveryDate;
+
+    // 주문 메모 (선택사항)
+    private String orderNote;
+
+    // 결제 방법 (선택사항)
+    private String paymentMethod;
 
     /**
      * 기본 생성자
      */
     public Order() {
-        this.orderItems = new ArrayList<>();
-    }
-
-    /**
-     * 새 주문 생성용 생성자
-     * @param userId 주문 사용자 ID
-     * @param deliveryAddress 배송 주소
-     * @param phoneNumber 연락처
-     */
-    public Order(String userId, String deliveryAddress, String phoneNumber) {
-        this.orderId = generateOrderId();
-        this.userId = userId;
-        this.deliveryAddress = deliveryAddress;
-        this.phoneNumber = phoneNumber;
-        this.orderItems = new ArrayList<>();
-        this.totalAmount = 0;
-        this.status = OrderStatus.PENDING;
+        this.items = new ArrayList<>();
         this.orderDate = LocalDateTime.now();
+        this.status = OrderStatus.PENDING;
     }
 
     /**
-     * 전체 정보 포함 생성자 (파일에서 읽을 때 사용)
+     * 필수 정보를 포함한 생성자
+     *
+     * @param userId 사용자 ID
+     * @param shippingAddress 배송 주소
      */
-    public Order(String orderId, String userId, int totalAmount, String deliveryAddress,
-                 String phoneNumber, OrderStatus status, LocalDateTime orderDate) {
-        this.orderId = orderId;
+    public Order(String userId, String shippingAddress) {
+        this();
         this.userId = userId;
-        this.totalAmount = totalAmount;
-        this.deliveryAddress = deliveryAddress;
-        this.phoneNumber = phoneNumber;
-        this.status = status;
+        this.shippingAddress = shippingAddress;
+    }
+
+    /**
+     * 전체 정보를 포함한 생성자
+     *
+     * @param id 주문 ID
+     * @param userId 사용자 ID
+     * @param orderDate 주문 일시
+     * @param status 주문 상태
+     * @param totalAmount 총 금액
+     * @param shippingAddress 배송 주소
+     */
+    public Order(String id, String userId, LocalDateTime orderDate,
+                 OrderStatus status, double totalAmount, String shippingAddress) {
+        this.id = id;
+        this.userId = userId;
         this.orderDate = orderDate;
-        this.orderItems = new ArrayList<>();
-
-        // 기존 주문 ID에서 숫자 부분을 추출하여 카운터 업데이트
-        updateOrderCounter(orderId);
+        this.status = status;
+        this.totalAmount = totalAmount;
+        this.shippingAddress = shippingAddress;
+        this.items = new ArrayList<>();
     }
 
     /**
-     * 주문 ID 자동 생성
-     * 형식: ORD001, ORD002, ORD003...
+     * 주문 항목 추가
+     *
+     * @param item 추가할 주문 항목
      */
-    private String generateOrderId() {
-        return String.format("ORD%03d", orderCounter++);
-    }
-
-    /**
-     * 기존 주문 ID로부터 카운터 업데이트
-     */
-    private void updateOrderCounter(String orderId) {
-        if (orderId != null && orderId.startsWith("ORD")) {
-            try {
-                int idNumber = Integer.parseInt(orderId.substring(3)); // ORD001 -> 001 -> 1
-                if (idNumber >= orderCounter) {
-                    orderCounter = idNumber + 1;
-                }
-            } catch (NumberFormatException e) {
-                // ID 형식이 잘못된 경우 무시
-            }
+    public void addItem(OrderItem item) {
+        if (item != null) {
+            this.items.add(item);
+            recalculateTotalAmount();
         }
     }
 
     /**
-     * 주문에 상품 추가
-     * @param product 상품
-     * @param quantity 수량
+     * 주문 항목 제거
+     *
+     * @param item 제거할 주문 항목
      */
-    public void addOrderItem(Product product, int quantity) {
-        OrderItem orderItem = new OrderItem(product, quantity);
-        orderItems.add(orderItem);
-        calculateTotalAmount(); // 총액 재계산
+    public void removeItem(OrderItem item) {
+        if (item != null) {
+            this.items.remove(item);
+            recalculateTotalAmount();
+        }
     }
 
     /**
-     * 주문 아이템 추가 (OrderItem 객체로)
-     * @param orderItem 주문 아이템
+     * 총 금액 재계산
      */
-    public void addOrderItem(OrderItem orderItem) {
-        orderItems.add(orderItem);
-        calculateTotalAmount(); // 총액 재계산
+    private void recalculateTotalAmount() {
+        this.totalAmount = 0;
+        for (OrderItem item : items) {
+            this.totalAmount += item.getPrice() * item.getQuantity();
+        }
     }
 
     /**
-     * 총 주문 금액 계산
+     * 주문 상태 업데이트
+     *
+     * @param newStatus 새로운 상태
      */
-    public void calculateTotalAmount() {
-        totalAmount = 0;
-        for (OrderItem item : orderItems) {
-            totalAmount += item.getTotalPrice();
+    public void updateStatus(OrderStatus newStatus) {
+        this.status = newStatus;
+
+        // 상태에 따른 날짜 업데이트
+        switch (newStatus) {
+            case PAID:
+                this.paymentDate = LocalDateTime.now();
+                break;
+            case SHIPPING:
+                this.shippingDate = LocalDateTime.now();
+                break;
+            case DELIVERED:
+                this.deliveryDate = LocalDateTime.now();
+                break;
         }
     }
 
     /**
      * 주문 취소 가능 여부 확인
+     *
      * @return 취소 가능하면 true
      */
     public boolean isCancellable() {
-        return status == OrderStatus.PENDING || status == OrderStatus.CONFIRMED;
+        return status == OrderStatus.PENDING || status == OrderStatus.PAID;
     }
 
     /**
-     * 주문 취소
-     * @return 취소 성공 여부
+     * 주문 완료 여부 확인
+     *
+     * @return 완료되었으면 true
      */
-    public boolean cancel() {
-        if (isCancellable()) {
-            this.status = OrderStatus.CANCELLED;
-            return true;
-        }
-        return false;
+    public boolean isCompleted() {
+        return status == OrderStatus.DELIVERED;
     }
 
     /**
-     * 주문 확인 처리
+     * 주문 진행중 여부 확인
+     *
+     * @return 진행중이면 true
      */
-    public void confirm() {
-        if (status == OrderStatus.PENDING) {
-            this.status = OrderStatus.CONFIRMED;
-        }
+    public boolean isInProgress() {
+        return status != OrderStatus.DELIVERED && status != OrderStatus.CANCELLED;
+    }
+
+    // Getters and Setters
+
+    /**
+     * 주문 ID 반환
+     * @return 주문 ID
+     */
+    public String getId() {
+        return id;
     }
 
     /**
-     * 배송 시작 처리
+     * 주문 ID 설정
+     * @param id 주문 ID
      */
-    public void ship() {
-        if (status == OrderStatus.CONFIRMED) {
-            this.status = OrderStatus.SHIPPED;
-        }
+    public void setId(String id) {
+        this.id = id;
     }
 
     /**
-     * 배송 완료 처리
+     * 사용자 ID 반환
+     * @return 사용자 ID
      */
-    public void deliver() {
-        if (status == OrderStatus.SHIPPED) {
-            this.status = OrderStatus.DELIVERED;
-        }
-    }
-
-    // Getter/Setter 메서드들
-    public String getOrderId() {
-        return orderId;
-    }
-
-    public void setOrderId(String orderId) {
-        this.orderId = orderId;
-    }
-
     public String getUserId() {
         return userId;
     }
 
+    /**
+     * 사용자 ID 설정
+     * @param userId 사용자 ID
+     */
     public void setUserId(String userId) {
         this.userId = userId;
     }
 
-    public List<OrderItem> getOrderItems() {
-        return orderItems;
-    }
-
-    public void setOrderItems(List<OrderItem> orderItems) {
-        this.orderItems = orderItems;
-        calculateTotalAmount(); // 아이템 설정 시 총액 재계산
-    }
-
-    public int getTotalAmount() {
-        return totalAmount;
-    }
-
-    public void setTotalAmount(int totalAmount) {
-        this.totalAmount = totalAmount;
-    }
-
-    public String getDeliveryAddress() {
-        return deliveryAddress;
-    }
-
-    public void setDeliveryAddress(String deliveryAddress) {
-        this.deliveryAddress = deliveryAddress;
-    }
-
-    public String getPhoneNumber() {
-        return phoneNumber;
-    }
-
-    public void setPhoneNumber(String phoneNumber) {
-        this.phoneNumber = phoneNumber;
-    }
-
-    public OrderStatus getStatus() {
-        return status;
-    }
-
-    public void setStatus(OrderStatus status) {
-        this.status = status;
-    }
-
+    /**
+     * 주문 일시 반환
+     * @return 주문 일시
+     */
     public LocalDateTime getOrderDate() {
         return orderDate;
     }
 
+    /**
+     * 주문 일시 설정
+     * @param orderDate 주문 일시
+     */
     public void setOrderDate(LocalDateTime orderDate) {
         this.orderDate = orderDate;
     }
 
     /**
-     * 총 금액을 원화 형식으로 반환
+     * 주문 상태 반환
+     * @return 주문 상태
      */
-    public String getFormattedTotalAmount() {
-        return String.format("%,d원", totalAmount);
+    public OrderStatus getStatus() {
+        return status;
     }
 
     /**
-     * 주문 일시를 문자열로 반환
+     * 주문 상태 설정
+     * @param status 주문 상태
      */
-    public String getFormattedOrderDate() {
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-        return orderDate.format(formatter);
+    public void setStatus(OrderStatus status) {
+        this.status = status;
     }
 
     /**
-     * 파일 저장용 문자열 변환
-     * 주문 기본 정보만 저장 (주문 아이템은 별도 파일)
+     * 주문 항목 목록 반환
+     * @return 주문 항목 목록
      */
-    public String toFileString() {
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-        return orderId + "|" + userId + "|" + totalAmount + "|" + deliveryAddress + "|" +
-                phoneNumber + "|" + status.name() + "|" + orderDate.format(formatter);
+    public List<OrderItem> getItems() {
+        return items;
     }
 
     /**
-     * 파일에서 읽은 문자열로부터 Order 객체 생성
+     * 주문 항목 목록 설정
+     * @param items 주문 항목 목록
      */
-    public static Order fromFileString(String fileString) {
-        String[] parts = fileString.split("\\|");
+    public void setItems(List<OrderItem> items) {
+        this.items = items;
+    }
 
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-        LocalDateTime orderDate = LocalDateTime.parse(parts[6], formatter);
-        OrderStatus status = OrderStatus.valueOf(parts[5]);
+    /**
+     * 총 금액 반환
+     * @return 총 금액
+     */
+    public double getTotalAmount() {
+        return totalAmount;
+    }
 
-        return new Order(
-                parts[0], // orderId
-                parts[1], // userId
-                Integer.parseInt(parts[2]), // totalAmount
-                parts[3], // deliveryAddress
-                parts[4], // phoneNumber
-                status,   // status
-                orderDate // orderDate
+    /**
+     * 총 금액 설정
+     * @param totalAmount 총 금액
+     */
+    public void setTotalAmount(double totalAmount) {
+        this.totalAmount = totalAmount;
+    }
+
+    /**
+     * 배송 주소 반환
+     * @return 배송 주소
+     */
+    public String getShippingAddress() {
+        return shippingAddress;
+    }
+
+    /**
+     * 배송 주소 설정
+     * @param shippingAddress 배송 주소
+     */
+    public void setShippingAddress(String shippingAddress) {
+        this.shippingAddress = shippingAddress;
+    }
+
+    /**
+     * 결제 일시 반환
+     * @return 결제 일시
+     */
+    public LocalDateTime getPaymentDate() {
+        return paymentDate;
+    }
+
+    /**
+     * 결제 일시 설정
+     * @param paymentDate 결제 일시
+     */
+    public void setPaymentDate(LocalDateTime paymentDate) {
+        this.paymentDate = paymentDate;
+    }
+
+    /**
+     * 배송 시작일 반환
+     * @return 배송 시작일
+     */
+    public LocalDateTime getShippingDate() {
+        return shippingDate;
+    }
+
+    /**
+     * 배송 시작일 설정
+     * @param shippingDate 배송 시작일
+     */
+    public void setShippingDate(LocalDateTime shippingDate) {
+        this.shippingDate = shippingDate;
+    }
+
+    /**
+     * 배송 완료일 반환
+     * @return 배송 완료일
+     */
+    public LocalDateTime getDeliveryDate() {
+        return deliveryDate;
+    }
+
+    /**
+     * 배송 완료일 설정
+     * @param deliveryDate 배송 완료일
+     */
+    public void setDeliveryDate(LocalDateTime deliveryDate) {
+        this.deliveryDate = deliveryDate;
+    }
+
+    /**
+     * 주문 메모 반환
+     * @return 주문 메모
+     */
+    public String getOrderNote() {
+        return orderNote;
+    }
+
+    /**
+     * 주문 메모 설정
+     * @param orderNote 주문 메모
+     */
+    public void setOrderNote(String orderNote) {
+        this.orderNote = orderNote;
+    }
+
+    /**
+     * 결제 방법 반환
+     * @return 결제 방법
+     */
+    public String getPaymentMethod() {
+        return paymentMethod;
+    }
+
+    /**
+     * 결제 방법 설정
+     * @param paymentMethod 결제 방법
+     */
+    public void setPaymentMethod(String paymentMethod) {
+        this.paymentMethod = paymentMethod;
+    }
+
+    /**
+     * 주문 정보를 문자열로 변환
+     *
+     * @return 주문 정보 문자열
+     */
+    @Override
+    public String toString() {
+        return String.format(
+                "Order{id='%s', userId='%s', orderDate=%s, status=%s, totalAmount=%.2f, itemCount=%d}",
+                id, userId, orderDate, status, totalAmount, items.size()
         );
     }
 
+    /**
+     * 주문 상세 정보 출력
+     *
+     * @return 상세 정보 문자열
+     */
+    public String toDetailString() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("=== 주문 상세 정보 ===\n");
+        sb.append("주문 번호: ").append(id).append("\n");
+        sb.append("주문자: ").append(userId).append("\n");
+        sb.append("주문 일시: ").append(orderDate).append("\n");
+        sb.append("주문 상태: ").append(status.getDescription()).append("\n");
+        sb.append("배송 주소: ").append(shippingAddress).append("\n");
+
+        if (paymentDate != null) {
+            sb.append("결제 일시: ").append(paymentDate).append("\n");
+        }
+        if (shippingDate != null) {
+            sb.append("배송 시작: ").append(shippingDate).append("\n");
+        }
+        if (deliveryDate != null) {
+            sb.append("배송 완료: ").append(deliveryDate).append("\n");
+        }
+
+        sb.append("\n--- 주문 항목 ---\n");
+        for (int i = 0; i < items.size(); i++) {
+            OrderItem item = items.get(i);
+            sb.append(String.format("%d. 상품ID: %s, 수량: %d개, 단가: %,.0f원\n",
+                    i + 1, item.getProductId(), item.getQuantity(), item.getPrice()));
+        }
+
+        sb.append("\n총 금액: ").append(String.format("%,.0f원", totalAmount));
+
+        return sb.toString();
+    }
+
+    /**
+     * 객체 동등성 비교
+     * ID를 기준으로 비교
+     *
+     * @param obj 비교할 객체
+     * @return 동일한 주문이면 true
+     */
     @Override
-    public String toString() {
-        return "Order{" +
-                "orderId='" + orderId + '\'' +
-                ", userId='" + userId + '\'' +
-                ", totalAmount=" + totalAmount +
-                ", status=" + status +
-                ", orderDate=" + orderDate +
-                ", itemCount=" + (orderItems != null ? orderItems.size() : 0) +
-                '}';
+    public boolean equals(Object obj) {
+        if (this == obj) return true;
+        if (obj == null || getClass() != obj.getClass()) return false;
+
+        Order order = (Order) obj;
+        return Objects.equals(id, order.id);
+    }
+
+    /**
+     * 해시코드 생성
+     * ID를 기준으로 생성
+     *
+     * @return 해시코드
+     */
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
     }
 }

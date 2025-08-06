@@ -1,538 +1,441 @@
-// =================================================================
-// InputValidator.java - 입력값 검증 유틸리티
-// =================================================================
 package javaproject.util;
 
-import java.util.ArrayList;
-import java.util.List;
+import javaproject.exception.InvalidInputException;
 import java.util.regex.Pattern;
 
 /**
- * 사용자 입력값을 검증하는 유틸리티 클래스
- * 회원가입, 상품등록 등에서 입력값 유효성 검사에 사용
+ * 입력 검증 유틸리티 클래스
+ * 싱글톤 패턴을 적용하여 전역적으로 하나의 인스턴스만 존재
+ * 사용자 입력에 대한 유효성 검사 기능 제공
+ *
+ * @author ShoppingMall Team
+ * @version 1.0
  */
 public class InputValidator {
 
-    // 정규식 패턴들을 미리 컴파일해서 성능 향상
-    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
-    private static final Pattern USER_ID_PATTERN = Pattern.compile("^[a-zA-Z0-9]{4,15}$");
-    private static final Pattern PRODUCT_ID_PATTERN = Pattern.compile("^P\\d{3}$");
-    private static final Pattern ORDER_ID_PATTERN = Pattern.compile("^ORD\\d{3}$");
+    // 싱글톤 인스턴스 - 클래스 로딩 시점에 생성 (thread-safe)
+    private static final InputValidator instance = new InputValidator();
+
+    // 정규표현식 패턴들 (컴파일된 패턴을 재사용하여 성능 향상)
+    private final Pattern emailPattern;
+    private final Pattern phonePattern;
+    private final Pattern idPattern;
+    private final Pattern passwordPattern;
+    private final Pattern namePattern;
+
+    // 검증 규칙 상수들
+    private static final int MIN_ID_LENGTH = 4;
+    private static final int MAX_ID_LENGTH = 20;
+    private static final int MIN_PASSWORD_LENGTH = 6;
+    private static final int MAX_PASSWORD_LENGTH = 20;
+    private static final int MIN_NAME_LENGTH = 2;
+    private static final int MAX_NAME_LENGTH = 50;
+    private static final double MIN_PRICE = 0.0;
+    private static final double MAX_PRICE = 1000000000.0; // 10억
+    private static final int MIN_QUANTITY = 0;
+    private static final int MAX_QUANTITY = 10000;
 
     /**
-     * 클래스 인스턴스 생성 방지 (유틸리티 클래스)
+     * private 생성자 - 싱글톤 패턴 구현
+     * 정규표현식 패턴들을 미리 컴파일하여 성능 최적화
      */
     private InputValidator() {
-        throw new UnsupportedOperationException("이 클래스는 인스턴스를 생성할 수 없습니다.");
-    }
+        // 이메일 패턴: 기본적인 이메일 형식
+        this.emailPattern = Pattern.compile(
+                "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"
+        );
 
-    // ================= 사용자 관련 검증 =================
+        // 전화번호 패턴: 한국 휴대폰 번호 형식 (010-XXXX-XXXX)
+        this.phonePattern = Pattern.compile(
+                "^010-\\d{4}-\\d{4}$"
+        );
 
-    /**
-     * 사용자 ID 유효성 검증
-     * - 4-15자리
-     * - 영문자와 숫자만 허용
-     * - 첫 글자는 영문자
-     * @param userId 검증할 사용자 ID
-     * @return 유효하면 true
-     */
-    public static boolean isValidUserId(String userId) {
-        if (userId == null || userId.trim().isEmpty()) {
-            return false;
-        }
+        // ID 패턴: 영문자로 시작, 영문자와 숫자만 허용
+        this.idPattern = Pattern.compile(
+                "^[a-zA-Z][a-zA-Z0-9]*$"
+        );
 
-        userId = userId.trim();
+        // 비밀번호 패턴: 영문자, 숫자, 특수문자 허용
+        this.passwordPattern = Pattern.compile(
+                "^[a-zA-Z0-9!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>/?]*$"
+        );
 
-        // 길이 검사
-        if (userId.length() < 4 || userId.length() > 15) {
-            return false;
-        }
-
-        // 첫 글자는 영문자여야 함
-        if (!Character.isLetter(userId.charAt(0))) {
-            return false;
-        }
-
-        // 정규식 검사
-        return USER_ID_PATTERN.matcher(userId).matches();
+        // 이름 패턴: 한글, 영문, 공백 허용
+        this.namePattern = Pattern.compile(
+                "^[가-힣a-zA-Z\\s]+$"
+        );
     }
 
     /**
-     * 비밀번호 유효성 검증
-     * - 6-20자리
-     * - 공백 불포함
-     * @param password 검증할 비밀번호
-     * @return 유효하면 true
+     * 싱글톤 인스턴스를 반환하는 정적 메서드
+     * @return InputValidator의 유일한 인스턴스
      */
-    public static boolean isValidPassword(String password) {
-        if (password == null) {
-            return false;
-        }
-
-        // 길이 검사
-        if (password.length() < 6 || password.length() > 20) {
-            return false;
-        }
-
-        // 공백 포함 검사
-        if (password.contains(" ")) {
-            return false;
-        }
-
-        return true;
+    public static InputValidator getInstance() {
+        return instance;
     }
 
     /**
-     * 이메일 유효성 검증
-     * @param email 검증할 이메일
-     * @return 유효하면 true
+     * 메뉴 선택 입력 검증
+     * @param input 사용자 입력 문자열
+     * @param min 최소값
+     * @param max 최대값
+     * @return 검증된 정수값
+     * @throws InvalidInputException 유효하지 않은 입력인 경우
      */
-    public static boolean isValidEmail(String email) {
+    public int validateMenuChoice(String input, int min, int max)
+            throws InvalidInputException {
+        // null 또는 빈 문자열 체크
+        if (input == null || input.trim().isEmpty()) {
+            throw new InvalidInputException("입력값이 비어있습니다.");
+        }
+
+        try {
+            int choice = Integer.parseInt(input.trim());
+
+            // 범위 검증
+            if (choice < min || choice > max) {
+                throw new InvalidInputException(
+                        String.format("%d~%d 사이의 숫자를 입력해주세요.", min, max)
+                );
+            }
+
+            return choice;
+
+        } catch (NumberFormatException e) {
+            throw new InvalidInputException("숫자를 입력해주세요.");
+        }
+    }
+
+    /**
+     * 사용자 ID 검증
+     * @param id 사용자 ID
+     * @return 검증된 ID
+     * @throws InvalidInputException 유효하지 않은 ID인 경우
+     */
+    public String validateUserId(String id) throws InvalidInputException {
+        // null 또는 빈 문자열 체크
+        if (id == null || id.trim().isEmpty()) {
+            throw new InvalidInputException("ID를 입력해주세요.");
+        }
+
+        id = id.trim();
+
+        // 길이 검증
+        if (id.length() < MIN_ID_LENGTH || id.length() > MAX_ID_LENGTH) {
+            throw new InvalidInputException(
+                    String.format("ID는 %d~%d자 사이여야 합니다.",
+                            MIN_ID_LENGTH, MAX_ID_LENGTH)
+            );
+        }
+
+        // 형식 검증
+        if (!idPattern.matcher(id).matches()) {
+            throw new InvalidInputException(
+                    "ID는 영문자로 시작하며, 영문자와 숫자만 사용 가능합니다."
+            );
+        }
+
+        return id;
+    }
+
+    /**
+     * 비밀번호 검증
+     * @param password 비밀번호
+     * @return 검증된 비밀번호
+     * @throws InvalidInputException 유효하지 않은 비밀번호인 경우
+     */
+    public String validatePassword(String password) throws InvalidInputException {
+        // null 또는 빈 문자열 체크
+        if (password == null || password.isEmpty()) {
+            throw new InvalidInputException("비밀번호를 입력해주세요.");
+        }
+
+        // 길이 검증
+        if (password.length() < MIN_PASSWORD_LENGTH ||
+                password.length() > MAX_PASSWORD_LENGTH) {
+            throw new InvalidInputException(
+                    String.format("비밀번호는 %d~%d자 사이여야 합니다.",
+                            MIN_PASSWORD_LENGTH, MAX_PASSWORD_LENGTH)
+            );
+        }
+
+        // 형식 검증
+        if (!passwordPattern.matcher(password).matches()) {
+            throw new InvalidInputException(
+                    "비밀번호에 허용되지 않는 문자가 포함되어 있습니다."
+            );
+        }
+
+        // 보안 강도 체크 (선택적)
+        boolean hasLetter = false;
+        boolean hasDigit = false;
+
+        for (char c : password.toCharArray()) {
+            if (Character.isLetter(c)) hasLetter = true;
+            if (Character.isDigit(c)) hasDigit = true;
+            if (hasLetter && hasDigit) break;
+        }
+
+        if (!hasLetter || !hasDigit) {
+            throw new InvalidInputException(
+                    "비밀번호는 영문자와 숫자를 모두 포함해야 합니다."
+            );
+        }
+
+        return password;
+    }
+
+    /**
+     * 이메일 검증
+     * @param email 이메일 주소
+     * @return 검증된 이메일
+     * @throws InvalidInputException 유효하지 않은 이메일인 경우
+     */
+    public String validateEmail(String email) throws InvalidInputException {
+        // null 또는 빈 문자열 체크
         if (email == null || email.trim().isEmpty()) {
-            return false;
+            throw new InvalidInputException("이메일을 입력해주세요.");
         }
 
-        email = email.trim();
+        email = email.trim().toLowerCase();
 
-        // 기본 길이 검사 (최소 5자: a@b.c)
-        if (email.length() < 5) {
-            return false;
+        // 형식 검증
+        if (!emailPattern.matcher(email).matches()) {
+            throw new InvalidInputException(
+                    "올바른 이메일 형식이 아닙니다. (예: user@example.com)"
+            );
         }
 
-        // 정규식 검사
-        return EMAIL_PATTERN.matcher(email).matches();
+        return email;
     }
 
     /**
-     * 사용자 이름 유효성 검증
-     * - 2-20자리
-     * - 한글, 영문자만 허용
-     * @param name 검증할 이름
-     * @return 유효하면 true
+     * 전화번호 검증
+     * @param phone 전화번호
+     * @return 검증된 전화번호
+     * @throws InvalidInputException 유효하지 않은 전화번호인 경우
      */
-    public static boolean isValidName(String name) {
+    public String validatePhone(String phone) throws InvalidInputException {
+        // null 또는 빈 문자열 체크
+        if (phone == null || phone.trim().isEmpty()) {
+            throw new InvalidInputException("전화번호를 입력해주세요.");
+        }
+
+        phone = phone.trim();
+
+        // 형식 검증
+        if (!phonePattern.matcher(phone).matches()) {
+            throw new InvalidInputException(
+                    "올바른 전화번호 형식이 아닙니다. (예: 010-1234-5678)"
+            );
+        }
+
+        return phone;
+    }
+
+    /**
+     * 이름 검증
+     * @param name 이름
+     * @return 검증된 이름
+     * @throws InvalidInputException 유효하지 않은 이름인 경우
+     */
+    public String validateName(String name) throws InvalidInputException {
+        // null 또는 빈 문자열 체크
         if (name == null || name.trim().isEmpty()) {
-            return false;
+            throw new InvalidInputException("이름을 입력해주세요.");
         }
 
         name = name.trim();
 
-        // 길이 검사
-        if (name.length() < 2 || name.length() > 20) {
-            return false;
+        // 길이 검증
+        if (name.length() < MIN_NAME_LENGTH || name.length() > MAX_NAME_LENGTH) {
+            throw new InvalidInputException(
+                    String.format("이름은 %d~%d자 사이여야 합니다.",
+                            MIN_NAME_LENGTH, MAX_NAME_LENGTH)
+            );
         }
 
-        // 한글, 영문자만 허용 (숫자, 특수문자 제외)
-        for (char c : name.toCharArray()) {
-            if (!Character.isLetter(c) && c != ' ') {
-                return false;
-            }
+        // 형식 검증
+        if (!namePattern.matcher(name).matches()) {
+            throw new InvalidInputException(
+                    "이름은 한글 또는 영문자만 사용 가능합니다."
+            );
         }
 
-        return true;
-    }
-
-    // ================= 상품 관련 검증 =================
-
-    /**
-     * 상품명 유효성 검증
-     * - 2-100자리
-     * - 빈 문자열 불허
-     * @param productName 검증할 상품명
-     * @return 유효하면 true
-     */
-    public static boolean isValidProductName(String productName) {
-        if (productName == null || productName.trim().isEmpty()) {
-            return false;
-        }
-
-        productName = productName.trim();
-
-        // 길이 검사
-        if (productName.length() < 2 || productName.length() > 100) {
-            return false;
-        }
-
-        return true;
+        return name;
     }
 
     /**
-     * 상품 가격 유효성 검증
-     * - 0 이상의 정수
-     * - 최대 가격 제한
-     * @param price 검증할 가격
-     * @return 유효하면 true
+     * 주소 검증
+     * @param address 주소
+     * @return 검증된 주소
+     * @throws InvalidInputException 유효하지 않은 주소인 경우
      */
-    public static boolean isValidPrice(int price) {
-        return price >= 0 && price <= 10_000_000;
-    }
-
-    /**
-     * 재고 수량 유효성 검증
-     * - 0 이상의 정수
-     * @param stock 검증할 재고
-     * @return 유효하면 true
-     */
-    public static boolean isValidStock(int stock) {
-        return stock >= 0;
-    }
-
-    /**
-     * 상품 카테고리 유효성 검증
-     * - 2-50자리
-     * - 빈 문자열 불허
-     * @param category 검증할 카테고리
-     * @return 유효하면 true
-     */
-    public static boolean isValidCategory(String category) {
-        if (category == null || category.trim().isEmpty()) {
-            return false;
-        }
-
-        category = category.trim();
-
-        // 길이 검사
-        if (category.length() < 2 || category.length() > 50) {
-            return false;
-        }
-
-        return true;
-    }
-
-    /**
-     * 상품 설명 유효성 검증
-     * - 0-500자리 (선택적)
-     * @param description 검증할 설명
-     * @return 유효하면 true
-     */
-    public static boolean isValidDescription(String description) {
-        if (description == null) {
-            return true; // null은 허용 (선택적 항목)
-        }
-
-        // 길이 검사
-        return description.length() <= 500;
-    }
-
-    // ================= 주문 관련 검증 =================
-
-    /**
-     * 주문 수량 유효성 검증
-     * - 1 이상의 정수
-     * - 최대 수량 제한
-     * @param quantity 검증할 수량
-     * @return 유효하면 true
-     */
-    public static boolean isValidQuantity(int quantity) {
-        return quantity > 0 && quantity <= 999;
-    }
-
-    /**
-     * 배송 주소 유효성 검증
-     * - 10-200자리
-     * - 빈 문자열 불허
-     * @param address 검증할 주소
-     * @return 유효하면 true
-     */
-    public static boolean isValidAddress(String address) {
+    public String validateAddress(String address) throws InvalidInputException {
+        // null 또는 빈 문자열 체크
         if (address == null || address.trim().isEmpty()) {
-            return false;
+            throw new InvalidInputException("주소를 입력해주세요.");
         }
 
         address = address.trim();
 
-        // 길이 검사
-        if (address.length() < 10 || address.length() > 200) {
-            return false;
+        // 최소 길이 검증
+        if (address.length() < 5) {
+            throw new InvalidInputException("주소가 너무 짧습니다.");
         }
 
-        return true;
+        // 최대 길이 검증
+        if (address.length() > 200) {
+            throw new InvalidInputException("주소가 너무 깁니다. (최대 200자)");
+        }
+
+        return address;
     }
 
     /**
-     * 전화번호 유효성 검증
-     * - 010-1234-5678 또는 01012345678 형식
-     * @param phoneNumber 검증할 전화번호
-     * @return 유효하면 true
+     * 상품명 검증
+     * @param productName 상품명
+     * @return 검증된 상품명
+     * @throws InvalidInputException 유효하지 않은 상품명인 경우
      */
-    public static boolean isValidPhoneNumber(String phoneNumber) {
-        if (phoneNumber == null || phoneNumber.trim().isEmpty()) {
-            return false;
+    public String validateProductName(String productName)
+            throws InvalidInputException {
+        // null 또는 빈 문자열 체크
+        if (productName == null || productName.trim().isEmpty()) {
+            throw new InvalidInputException("상품명을 입력해주세요.");
         }
 
-        phoneNumber = phoneNumber.trim().replaceAll("-", ""); // 하이픈 제거
+        productName = productName.trim();
 
-        // 01X로 시작하는 11자리 숫자인지 확인
-        if (!phoneNumber.matches("^01[0-9]\\d{8}$")) {
-            return false;
+        // 길이 검증
+        if (productName.length() < 2) {
+            throw new InvalidInputException("상품명은 최소 2자 이상이어야 합니다.");
         }
 
-        return true;
-    }
-
-    // ================= ID 형식 검증 =================
-
-    /**
-     * 상품 ID 형식 검증 (P001, P002...)
-     * @param productId 검증할 상품 ID
-     * @return 유효하면 true
-     */
-    public static boolean isValidProductIdFormat(String productId) {
-        if (productId == null || productId.trim().isEmpty()) {
-            return false;
+        if (productName.length() > 100) {
+            throw new InvalidInputException("상품명은 최대 100자까지 가능합니다.");
         }
 
-        return PRODUCT_ID_PATTERN.matcher(productId.trim()).matches();
+        return productName;
     }
 
     /**
-     * 주문 ID 형식 검증 (ORD001, ORD002...)
-     * @param orderId 검증할 주문 ID
-     * @return 유효하면 true
+     * 가격 검증
+     * @param priceStr 가격 문자열
+     * @return 검증된 가격
+     * @throws InvalidInputException 유효하지 않은 가격인 경우
      */
-    public static boolean isValidOrderIdFormat(String orderId) {
-        if (orderId == null || orderId.trim().isEmpty()) {
-            return false;
-        }
-
-        return ORDER_ID_PATTERN.matcher(orderId.trim()).matches();
-    }
-
-    // ================= 공통 검증 =================
-
-    /**
-     * 문자열이 null이 아니고 비어있지 않은지 검증
-     * @param str 검증할 문자열
-     * @return 유효하면 true
-     */
-    public static boolean isNotEmpty(String str) {
-        return str != null && !str.trim().isEmpty();
-    }
-
-    /**
-     * 숫자 문자열 검증
-     * @param str 검증할 문자열
-     * @return 숫자로 변환 가능하면 true
-     */
-    public static boolean isNumeric(String str) {
-        if (str == null || str.trim().isEmpty()) {
-            return false;
+    public double validatePrice(String priceStr) throws InvalidInputException {
+        // null 또는 빈 문자열 체크
+        if (priceStr == null || priceStr.trim().isEmpty()) {
+            throw new InvalidInputException("가격을 입력해주세요.");
         }
 
         try {
-            Integer.parseInt(str.trim());
-            return true;
+            double price = Double.parseDouble(priceStr.trim());
+
+            // 음수 체크
+            if (price < MIN_PRICE) {
+                throw new InvalidInputException("가격은 0원 이상이어야 합니다.");
+            }
+
+            // 최대값 체크
+            if (price > MAX_PRICE) {
+                throw new InvalidInputException(
+                        String.format("가격은 %,.0f원 이하여야 합니다.", MAX_PRICE)
+                );
+            }
+
+            return price;
+
         } catch (NumberFormatException e) {
-            return false;
+            throw new InvalidInputException("올바른 숫자를 입력해주세요.");
         }
     }
 
     /**
-     * 양의 정수 문자열 검증
-     * @param str 검증할 문자열
-     * @return 양의 정수로 변환 가능하면 true
+     * 수량 검증
+     * @param quantityStr 수량 문자열
+     * @return 검증된 수량
+     * @throws InvalidInputException 유효하지 않은 수량인 경우
      */
-    public static boolean isPositiveInteger(String str) {
-        if (!isNumeric(str)) {
-            return false;
+    public int validateQuantity(String quantityStr)
+            throws InvalidInputException {
+        // null 또는 빈 문자열 체크
+        if (quantityStr == null || quantityStr.trim().isEmpty()) {
+            throw new InvalidInputException("수량을 입력해주세요.");
         }
 
-        int number = Integer.parseInt(str.trim());
-        return number > 0;
-    }
+        try {
+            int quantity = Integer.parseInt(quantityStr.trim());
 
-    /**
-     * 0 이상의 정수 문자열 검증
-     * @param str 검증할 문자열
-     * @return 0 이상의 정수로 변환 가능하면 true
-     */
-    public static boolean isNonNegativeInteger(String str) {
-        if (!isNumeric(str)) {
-            return false;
-        }
-
-        int number = Integer.parseInt(str.trim());
-        return number >= 0;
-    }
-
-    // ================= 복합 검증 메서드 =================
-
-    /**
-     * 사용자 회원가입 정보 전체 검증
-     * @param userId 사용자 ID
-     * @param password 비밀번호
-     * @param name 이름
-     * @param email 이메일
-     * @return 검증 결과 객체
-     */
-    public static ValidationResult validateUserRegistration(String userId, String password,
-                                                            String name, String email) {
-        ValidationResult result = new ValidationResult();
-
-        // 사용자 ID 검증
-        if (!isValidUserId(userId)) {
-            result.addError("사용자 ID는 4-15자의 영문자와 숫자로 구성되어야 하며, 첫 글자는 영문자여야 합니다.");
-        }
-
-        // 비밀번호 검증
-        if (!isValidPassword(password)) {
-            result.addError("비밀번호는 6-20자로 구성되어야 하며, 공백을 포함할 수 없습니다.");
-        }
-
-        // 이름 검증
-        if (!isValidName(name)) {
-            result.addError("이름은 2-20자의 한글 또는 영문자로 구성되어야 합니다.");
-        }
-
-        // 이메일 검증
-        if (!isValidEmail(email)) {
-            result.addError("올바른 이메일 형식이 아닙니다.");
-        }
-
-        return result;
-    }
-
-    /**
-     * 상품 등록 정보 전체 검증
-     * @param name 상품명
-     * @param price 가격
-     * @param category 카테고리
-     * @param stock 재고
-     * @param description 설명
-     * @return 검증 결과 객체
-     */
-    public static ValidationResult validateProductRegistration(String name, int price,
-                                                               String category, int stock, String description) {
-        ValidationResult result = new ValidationResult();
-
-        // 상품명 검증
-        if (!isValidProductName(name)) {
-            result.addError("상품명은 2-100자로 구성되어야 합니다.");
-        }
-
-        // 가격 검증
-        if (!isValidPrice(price)) {
-            result.addError("가격은 0원 이상 10,000,000원 이하여야 합니다.");
-        }
-
-        // 카테고리 검증
-        if (!isValidCategory(category)) {
-            result.addError("카테고리는 2-50자로 구성되어야 합니다.");
-        }
-
-        // 재고 검증
-        if (!isValidStock(stock)) {
-            result.addError("재고는 0 이상의 정수여야 합니다.");
-        }
-
-        // 설명 검증
-        if (!isValidDescription(description)) {
-            result.addError("상품 설명은 500자 이하여야 합니다.");
-        }
-
-        return result;
-    }
-
-    /**
-     * 주문 정보 검증
-     * @param quantity 주문 수량
-     * @param address 배송 주소
-     * @param phoneNumber 전화번호
-     * @return 검증 결과 객체
-     */
-    public static ValidationResult validateOrderInfo(int quantity, String address, String phoneNumber) {
-        ValidationResult result = new ValidationResult();
-
-        // 수량 검증
-        if (!isValidQuantity(quantity)) {
-            result.addError("주문 수량은 1개 이상 999개 이하여야 합니다.");
-        }
-
-        // 주소 검증
-        if (!isValidAddress(address)) {
-            result.addError("배송 주소는 10-200자로 입력해주세요.");
-        }
-
-        // 전화번호 검증
-        if (!isValidPhoneNumber(phoneNumber)) {
-            result.addError("올바른 휴대폰 번호 형식이 아닙니다. (예: 010-1234-5678)");
-        }
-
-        return result;
-    }
-
-    // ================= 검증 결과 클래스 =================
-
-    /**
-     * 검증 결과를 담는 내부 클래스
-     */
-    public static class ValidationResult {
-        private List<String> errors;
-        private boolean valid;
-
-        public ValidationResult() {
-            this.errors = new ArrayList<>();
-            this.valid = true;
-        }
-
-        /**
-         * 에러 메시지 추가
-         * @param errorMessage 에러 메시지
-         */
-        public void addError(String errorMessage) {
-            errors.add(errorMessage);
-            valid = false;
-        }
-
-        /**
-         * 검증 성공 여부
-         * @return 모든 검증이 성공하면 true
-         */
-        public boolean isValid() {
-            return valid;
-        }
-
-        /**
-         * 에러 메시지 목록
-         * @return 에러 메시지 리스트
-         */
-        public List<String> getErrors() {
-            return new ArrayList<>(errors);
-        }
-
-        /**
-         * 첫 번째 에러 메시지
-         * @return 첫 번째 에러 메시지 (없으면 null)
-         */
-        public String getFirstError() {
-            return errors.isEmpty() ? null : errors.get(0);
-        }
-
-        /**
-         * 모든 에러 메시지를 하나의 문자열로 결합
-         * @return 결합된 에러 메시지
-         */
-        public String getAllErrorsAsString() {
-            if (errors.isEmpty()) {
-                return "";
+            // 최소값 체크
+            if (quantity < MIN_QUANTITY) {
+                throw new InvalidInputException("수량은 0개 이상이어야 합니다.");
             }
 
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < errors.size(); i++) {
-                sb.append("- ").append(errors.get(i));
-                if (i < errors.size() - 1) {
-                    sb.append("\n");
-                }
+            // 최대값 체크
+            if (quantity > MAX_QUANTITY) {
+                throw new InvalidInputException(
+                        String.format("수량은 %d개 이하여야 합니다.", MAX_QUANTITY)
+                );
             }
-            return sb.toString();
+
+            return quantity;
+
+        } catch (NumberFormatException e) {
+            throw new InvalidInputException("올바른 숫자를 입력해주세요.");
+        }
+    }
+
+    /**
+     * Yes/No 입력 검증
+     * @param input 사용자 입력
+     * @return true(Y/y) 또는 false(N/n)
+     * @throws InvalidInputException 유효하지 않은 입력인 경우
+     */
+    public boolean validateYesNo(String input) throws InvalidInputException {
+        // null 또는 빈 문자열 체크
+        if (input == null || input.trim().isEmpty()) {
+            throw new InvalidInputException("Y(예) 또는 N(아니오)를 입력해주세요.");
         }
 
-        @Override
-        public String toString() {
-            return "ValidationResult{" +
-                    "valid=" + valid +
-                    ", errorCount=" + errors.size() +
-                    '}';
+        String normalized = input.trim().toUpperCase();
+
+        if ("Y".equals(normalized) || "YES".equals(normalized)) {
+            return true;
+        } else if ("N".equals(normalized) || "NO".equals(normalized)) {
+            return false;
+        } else {
+            throw new InvalidInputException("Y(예) 또는 N(아니오)를 입력해주세요.");
         }
+    }
+
+    /**
+     * 검색 키워드 검증
+     * @param keyword 검색 키워드
+     * @return 검증된 키워드
+     * @throws InvalidInputException 유효하지 않은 키워드인 경우
+     */
+    public String validateSearchKeyword(String keyword)
+            throws InvalidInputException {
+        // null 또는 빈 문자열 체크
+        if (keyword == null || keyword.trim().isEmpty()) {
+            throw new InvalidInputException("검색어를 입력해주세요.");
+        }
+
+        keyword = keyword.trim();
+
+        // 최소 길이 체크
+        if (keyword.length() < 2) {
+            throw new InvalidInputException("검색어는 최소 2자 이상 입력해주세요.");
+        }
+
+        // 최대 길이 체크
+        if (keyword.length() > 50) {
+            throw new InvalidInputException("검색어는 최대 50자까지 가능합니다.");
+        }
+
+        return keyword;
     }
 }

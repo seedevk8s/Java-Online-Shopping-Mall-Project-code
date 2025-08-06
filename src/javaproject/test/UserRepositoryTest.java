@@ -1,219 +1,260 @@
-// =================================================================
-// UserRepositoryTest.java - 사용자 Repository 테스트
-// =================================================================
 package javaproject.test;
 
 import javaproject.domain.User;
-import javaproject.exception.AuthenticationException;
-import javaproject.exception.FileIOException;
-import javaproject.exception.UserNotFoundException;
 import javaproject.repository.UserRepository;
-
-import java.util.Optional;
+import java.util.List;
 
 /**
- * UserRepository 기능을 테스트하는 클래스
- * 실제 프로젝트에서는 JUnit을 사용하지만, 여기서는 간단한 테스트 메서드로 구현
+ * UserRepository 테스트
+ *
+ * @author ShoppingMall Team
+ * @version 1.0
  */
 public class UserRepositoryTest {
 
-    private UserRepository userRepository;
+    private static UserRepository repository;
 
     /**
-     * 테스트 초기화
+     * 테스트 실행 메서드
      */
-    public UserRepositoryTest() {
-        this.userRepository = UserRepository.getInstance();
-    }
+    public static void runTests() {
+        System.out.println("\n====== UserRepository 테스트 시작 ======");
 
-    /**
-     * 모든 테스트 실행
-     */
-    public void runAllTests() {
-        System.out.println("========== UserRepository 테스트 시작 ==========");
+        repository = UserRepository.getInstance();
+        repository.deleteAll(); // 테스트 시작 전 초기화
 
-        try {
-            testSaveUser();
-            testFindUserById();
-            testFindUserByEmail();
-            testUpdateUser();
-            testDeleteUser();
-            testLogin();
-            testUserCount();
-            testUserStatistics();
+        testSaveUser();
+        testFindById();
+        testFindByEmail();
+        testUpdateUser();
+        testDeleteUser();
+        testFindAll();
+        testDuplicateCheck();
 
-            System.out.println("✅ UserRepository 모든 테스트 통과!");
+        repository.deleteAll(); // 테스트 후 정리
 
-        } catch (Exception e) {
-            System.err.println("❌ UserRepository 테스트 실패: " + e.getMessage());
-            e.printStackTrace();
-        }
-
-        System.out.println("========== UserRepository 테스트 완료 ==========\n");
+        System.out.println("====== UserRepository 테스트 완료 ======\n");
     }
 
     /**
      * 사용자 저장 테스트
      */
-    private void testSaveUser() throws FileIOException {
-        System.out.println("📋 사용자 저장 테스트...");
+    private static void testSaveUser() {
+        System.out.println("\n[TEST] 사용자 저장 테스트");
 
-        // 테스트 사용자 생성
-        User testUser = new User("testuser", "password123", "테스트사용자", "test@example.com");
+        try {
+            User user = new User("test1", "pass1", "테스트1",
+                    "test1@test.com", "010-1111-1111", "서울", false);
 
-        // 저장 테스트
-        boolean saved = userRepository.save(testUser);
-        assert saved : "사용자 저장 실패";
+            User saved = repository.save(user);
 
-        // 중복 저장 테스트 (실패해야 함)
-        boolean duplicateSaved = userRepository.save(testUser);
-        assert !duplicateSaved : "중복 사용자 저장이 성공하면 안됨";
+            assert saved != null : "저장된 사용자가 null";
+            assert saved.getId().equals("test1") : "저장된 사용자 ID 불일치";
+            assert repository.count() == 1 : "저장 후 카운트 오류";
 
-        System.out.println("   ✅ 사용자 저장 테스트 통과");
+            System.out.println("✅ 사용자 저장 성공");
+
+        } catch (Exception e) {
+            System.err.println("❌ 사용자 저장 실패: " + e.getMessage());
+        }
     }
 
     /**
-     * 사용자 ID로 조회 테스트
+     * ID로 조회 테스트
      */
-    private void testFindUserById() throws FileIOException {
-        System.out.println("📋 사용자 ID 조회 테스트...");
+    private static void testFindById() {
+        System.out.println("\n[TEST] ID로 사용자 조회 테스트");
 
-        // 존재하는 사용자 조회
-        Optional<User> foundUser = userRepository.findById("testuser");
-        assert foundUser.isPresent() : "저장된 사용자를 찾을 수 없음";
-        assert "테스트사용자".equals(foundUser.get().getName()) : "사용자 이름이 일치하지 않음";
+        try {
+            // 사용자 저장
+            User user = new User("test2", "pass2", "테스트2",
+                    "test2@test.com", "010-2222-2222", "부산", false);
+            repository.save(user);
 
-        // 존재하지 않는 사용자 조회
-        Optional<User> notFoundUser = userRepository.findById("nonexistent");
-        assert !notFoundUser.isPresent() : "존재하지 않는 사용자가 조회됨";
+            // ID로 조회
+            User found = repository.findById("test2");
+            assert found != null : "사용자 조회 실패";
+            assert found.getName().equals("테스트2") : "조회된 사용자 정보 불일치";
 
-        System.out.println("   ✅ 사용자 ID 조회 테스트 통과");
+            // 존재하지 않는 ID 조회
+            User notFound = repository.findById("notexist");
+            assert notFound == null : "존재하지 않는 사용자 조회 오류";
+
+            System.out.println("✅ ID로 사용자 조회 성공");
+
+        } catch (Exception e) {
+            System.err.println("❌ ID로 사용자 조회 실패: " + e.getMessage());
+        }
     }
 
     /**
      * 이메일로 조회 테스트
      */
-    private void testFindUserByEmail() throws FileIOException {
-        System.out.println("📋 이메일 조회 테스트...");
-
-        // 존재하는 이메일로 조회
-        Optional<User> foundUser = userRepository.findByEmail("test@example.com");
-        assert foundUser.isPresent() : "이메일로 사용자를 찾을 수 없음";
-        assert "testuser".equals(foundUser.get().getUserId()) : "사용자 ID가 일치하지 않음";
-
-        // 존재하지 않는 이메일로 조회
-        Optional<User> notFoundUser = userRepository.findByEmail("notfound@example.com");
-        assert !notFoundUser.isPresent() : "존재하지 않는 이메일로 사용자가 조회됨";
-
-        System.out.println("   ✅ 이메일 조회 테스트 통과");
-    }
-
-    /**
-     * 사용자 정보 수정 테스트
-     */
-    private void testUpdateUser() throws FileIOException, UserNotFoundException {
-        System.out.println("📋 사용자 정보 수정 테스트...");
-
-        // 사용자 조회
-        Optional<User> userOpt = userRepository.findById("testuser");
-        assert userOpt.isPresent() : "수정할 사용자를 찾을 수 없음";
-
-        User user = userOpt.get();
-        String originalName = user.getName();
-
-        // 이름 변경 테스트
-        boolean nameChanged = userRepository.changeName("testuser", "수정된이름");
-        assert nameChanged : "이름 변경 실패";
-
-        // 변경 확인
-        Optional<User> updatedUserOpt = userRepository.findById("testuser");
-        assert updatedUserOpt.isPresent() : "수정된 사용자를 찾을 수 없음";
-        assert "수정된이름".equals(updatedUserOpt.get().getName()) : "이름이 변경되지 않음";
-
-        // 원래 이름으로 복구
-        userRepository.changeName("testuser", originalName);
-
-        System.out.println("   ✅ 사용자 정보 수정 테스트 통과");
-    }
-
-    /**
-     * 로그인 테스트
-     */
-    private void testLogin() throws FileIOException {
-        System.out.println("📋 로그인 테스트...");
+    private static void testFindByEmail() {
+        System.out.println("\n[TEST] 이메일로 사용자 조회 테스트");
 
         try {
-            // 정상 로그인
-            User loggedInUser = userRepository.login("testuser", "password123");
-            assert loggedInUser != null : "로그인 실패";
-            assert "testuser".equals(loggedInUser.getUserId()) : "로그인된 사용자 ID가 일치하지 않음";
+            // 사용자 저장
+            User user = new User("test3", "pass3", "테스트3",
+                    "test3@test.com", "010-3333-3333", "대구", false);
+            repository.save(user);
 
-            System.out.println("   ✅ 정상 로그인 테스트 통과");
+            // 이메일로 조회
+            User found = repository.findByEmail("test3@test.com");
+            assert found != null : "이메일로 사용자 조회 실패";
+            assert found.getId().equals("test3") : "조회된 사용자 ID 불일치";
 
-        } catch (AuthenticationException e) {
-            assert false : "정상 로그인이 실패함: " + e.getMessage();
-        }
+            // 존재하지 않는 이메일 조회
+            User notFound = repository.findByEmail("notexist@test.com");
+            assert notFound == null : "존재하지 않는 이메일 조회 오류";
 
-        try {
-            // 잘못된 비밀번호로 로그인 (실패해야 함)
-            userRepository.login("testuser", "wrongpassword");
-            assert false : "잘못된 비밀번호로 로그인이 성공하면 안됨";
+            System.out.println("✅ 이메일로 사용자 조회 성공");
 
-        } catch (AuthenticationException e) {
-            System.out.println("   ✅ 잘못된 비밀번호 로그인 실패 테스트 통과");
-        }
-
-        try {
-            // 존재하지 않는 사용자로 로그인 (실패해야 함)
-            userRepository.login("nonexistent", "password");
-            assert false : "존재하지 않는 사용자로 로그인이 성공하면 안됨";
-
-        } catch (AuthenticationException e) {
-            System.out.println("   ✅ 존재하지 않는 사용자 로그인 실패 테스트 통과");
+        } catch (Exception e) {
+            System.err.println("❌ 이메일로 사용자 조회 실패: " + e.getMessage());
         }
     }
 
     /**
-     * 사용자 수 조회 테스트
+     * 사용자 수정 테스트
      */
-    private void testUserCount() throws FileIOException {
-        System.out.println("📋 사용자 수 조회 테스트...");
+    private static void testUpdateUser() {
+        System.out.println("\n[TEST] 사용자 수정 테스트");
 
-        long count = userRepository.count();
-        assert count > 0 : "사용자 수가 0보다 작음";
+        try {
+            // 사용자 저장
+            User user = new User("test4", "pass4", "테스트4",
+                    "test4@test.com", "010-4444-4444", "인천", false);
+            repository.save(user);
 
-        System.out.println("   ✅ 사용자 수 조회 테스트 통과 (총 " + count + "명)");
+            // 정보 수정
+            user.setName("수정된이름");
+            user.setEmail("modified@test.com");
+            User updated = repository.update(user);
+
+            // 수정 확인
+            User found = repository.findById("test4");
+            assert found.getName().equals("수정된이름") : "이름 수정 실패";
+            assert found.getEmail().equals("modified@test.com") : "이메일 수정 실패";
+
+            // 이메일 인덱스 업데이트 확인
+            User foundByEmail = repository.findByEmail("modified@test.com");
+            assert foundByEmail != null : "이메일 인덱스 업데이트 실패";
+
+            System.out.println("✅ 사용자 수정 성공");
+
+        } catch (Exception e) {
+            System.err.println("❌ 사용자 수정 실패: " + e.getMessage());
+        }
     }
 
     /**
-     * 사용자 통계 테스트
+     * 사용자 삭제 테스트
      */
-    private void testUserStatistics() throws FileIOException {
-        System.out.println("📋 사용자 통계 테스트...");
+    private static void testDeleteUser() {
+        System.out.println("\n[TEST] 사용자 삭제 테스트");
 
-        String statistics = userRepository.getUserStatistics();
-        assert statistics != null && !statistics.isEmpty() : "사용자 통계가 비어있음";
+        try {
+            // 사용자 저장
+            User user = new User("test5", "pass5", "테스트5",
+                    "test5@test.com", "010-5555-5555", "광주", false);
+            repository.save(user);
 
-        System.out.println("   ✅ 사용자 통계 테스트 통과");
-        System.out.println(statistics);
+            int countBefore = repository.count();
+
+            // 삭제
+            boolean deleted = repository.delete("test5");
+            assert deleted : "사용자 삭제 실패";
+
+            // 삭제 확인
+            User found = repository.findById("test5");
+            assert found == null : "삭제된 사용자가 조회됨";
+
+            int countAfter = repository.count();
+            assert countAfter == countBefore - 1 : "삭제 후 카운트 오류";
+
+            // 이메일 인덱스에서도 삭제 확인
+            User foundByEmail = repository.findByEmail("test5@test.com");
+            assert foundByEmail == null : "이메일 인덱스에서 삭제 실패";
+
+            System.out.println("✅ 사용자 삭제 성공");
+
+        } catch (Exception e) {
+            System.err.println("❌ 사용자 삭제 실패: " + e.getMessage());
+        }
     }
 
     /**
-     * 사용자 삭제 테스트 (마지막에 실행)
+     * 전체 조회 테스트
      */
-    private void testDeleteUser() throws FileIOException {
-        System.out.println("📋 사용자 삭제 테스트...");
+    private static void testFindAll() {
+        System.out.println("\n[TEST] 전체 사용자 조회 테스트");
 
-        // 삭제 전 존재 확인
-        assert userRepository.existsById("testuser") : "삭제할 사용자가 존재하지 않음";
+        try {
+            // 기존 데이터 삭제
+            repository.deleteAll();
 
-        // 삭제 실행
-        boolean deleted = userRepository.deleteById("testuser");
-        assert deleted : "사용자 삭제 실패";
+            // 여러 사용자 저장
+            repository.save(new User("all1", "pass", "사용자1",
+                    "all1@test.com", "010-1111-1111", "서울", false));
+            repository.save(new User("all2", "pass", "사용자2",
+                    "all2@test.com", "010-2222-2222", "부산", false));
+            repository.save(new User("all3", "pass", "관리자",
+                    "all3@test.com", "010-3333-3333", "대구", true));
 
-        // 삭제 후 존재하지 않음 확인
-        assert !userRepository.existsById("testuser") : "삭제된 사용자가 여전히 존재함";
+            // 전체 조회
+            List<User> all = repository.findAll();
+            assert all.size() == 3 : "전체 조회 수 오류";
 
-        System.out.println("   ✅ 사용자 삭제 테스트 통과");
+            // 관리자 조회
+            List<User> admins = repository.findAdmins();
+            assert admins.size() == 1 : "관리자 조회 수 오류";
+
+            // 일반 사용자 조회
+            List<User> regular = repository.findRegularUsers();
+            assert regular.size() == 2 : "일반 사용자 조회 수 오류";
+
+            System.out.println("✅ 전체 사용자 조회 성공");
+            System.out.println("   - 전체: " + all.size() + "명");
+            System.out.println("   - 관리자: " + admins.size() + "명");
+            System.out.println("   - 일반: " + regular.size() + "명");
+
+        } catch (Exception e) {
+            System.err.println("❌ 전체 사용자 조회 실패: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 중복 체크 테스트
+     */
+    private static void testDuplicateCheck() {
+        System.out.println("\n[TEST] 중복 체크 테스트");
+
+        try {
+            // 사용자 저장
+            User user = new User("dup1", "pass", "중복테스트",
+                    "dup@test.com", "010-9999-9999", "제주", false);
+            repository.save(user);
+
+            // ID 중복 체크
+            assert repository.existsById("dup1") : "존재하는 ID 체크 실패";
+            assert !repository.existsById("notexist") : "존재하지 않는 ID 체크 실패";
+
+            // 이메일 중복 체크
+            assert repository.existsByEmail("dup@test.com") : "존재하는 이메일 체크 실패";
+            assert !repository.existsByEmail("notexist@test.com") : "존재하지 않는 이메일 체크 실패";
+
+            System.out.println("✅ 중복 체크 성공");
+
+        } catch (Exception e) {
+            System.err.println("❌ 중복 체크 실패: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 메인 메서드 - 단독 실행용
+     */
+    public static void main(String[] args) {
+        runTests();
     }
 }

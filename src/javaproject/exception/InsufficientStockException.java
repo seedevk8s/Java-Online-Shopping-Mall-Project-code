@@ -1,19 +1,16 @@
 package javaproject.exception;
 
 /**
- * 상품의 재고가 부족할 때 발생하는 예외
- * 장바구니 담기, 주문 시 사용
+ * 재고 부족 예외 클래스
+ * 상품의 재고가 요청 수량보다 적을 때 발생
+ *
+ * @author ShoppingMall Team
+ * @version 1.0
  */
 public class InsufficientStockException extends Exception {
 
-    // 요청한 수량
-    private int requestedQuantity;
-
-    // 현재 재고
-    private int availableStock;
-
-    // 상품 ID
-    private String productId;
+    // 직렬화 버전 UID
+    private static final long serialVersionUID = 1L;
 
     /**
      * 기본 생성자
@@ -24,6 +21,7 @@ public class InsufficientStockException extends Exception {
 
     /**
      * 메시지를 포함한 생성자
+     *
      * @param message 예외 메시지
      */
     public InsufficientStockException(String message) {
@@ -31,38 +29,92 @@ public class InsufficientStockException extends Exception {
     }
 
     /**
-     * 상세 정보를 포함한 생성자
-     * @param productId 상품 ID
-     * @param requestedQuantity 요청한 수량
-     * @param availableStock 현재 재고
+     * 메시지와 원인을 포함한 생성자
+     *
+     * @param message 예외 메시지
+     * @param cause 예외 원인
      */
-    public InsufficientStockException(String productId, int requestedQuantity, int availableStock) {
-        super(String.format("재고가 부족합니다. 상품 ID: %s, 요청 수량: %d, 현재 재고: %d",
-                productId, requestedQuantity, availableStock));
-        this.productId = productId;
-        this.requestedQuantity = requestedQuantity;
-        this.availableStock = availableStock;
-    }
-
-    // Getter 메서드들
-    public int getRequestedQuantity() {
-        return requestedQuantity;
-    }
-
-    public int getAvailableStock() {
-        return availableStock;
-    }
-
-    public String getProductId() {
-        return productId;
+    public InsufficientStockException(String message, Throwable cause) {
+        super(message, cause);
     }
 
     /**
-     * 부족한 수량 계산
-     * @return 부족한 수량
+     * 원인을 포함한 생성자
+     *
+     * @param cause 예외 원인
      */
-    public int getShortage() {
-        return requestedQuantity - availableStock;
+    public InsufficientStockException(Throwable cause) {
+        super(cause);
+    }
+
+    /**
+     * 상품명과 재고 정보를 포함한 상세 메시지 생성
+     *
+     * @param productName 상품명
+     * @param available 사용 가능한 재고
+     * @param requested 요청된 수량
+     * @return 상세 예외 메시지
+     */
+    public static InsufficientStockException withDetails(String productName, int available, int requested) {
+        return new InsufficientStockException(
+                String.format("'%s' 상품의 재고가 부족합니다. (재고: %d개, 요청: %d개)",
+                        productName, available, requested)
+        );
+    }
+
+    /**
+     * 상품 ID와 재고 정보를 포함한 메시지 생성
+     *
+     * @param productId 상품 ID
+     * @param available 사용 가능한 재고
+     * @param requested 요청된 수량
+     * @return 상세 예외 메시지
+     */
+    public static InsufficientStockException withProductId(String productId, int available, int requested) {
+        return new InsufficientStockException(
+                String.format("상품(ID: %s)의 재고가 부족합니다. (재고: %d개, 요청: %d개)",
+                        productId, available, requested)
+        );
+    }
+
+    /**
+     * 품절 상태 메시지 생성
+     *
+     * @param productName 상품명
+     * @return 품절 예외
+     */
+    public static InsufficientStockException outOfStock(String productName) {
+        return new InsufficientStockException(
+                String.format("'%s' 상품은 현재 품절 상태입니다.", productName)
+        );
+    }
+
+    /**
+     * 재고 부족분 정보를 포함한 메시지 생성
+     *
+     * @param productName 상품명
+     * @param shortage 부족한 수량
+     * @return 재고 부족 예외
+     */
+    public static InsufficientStockException withShortage(String productName, int shortage) {
+        return new InsufficientStockException(
+                String.format("'%s' 상품의 재고가 %d개 부족합니다.", productName, shortage)
+        );
+    }
+
+    /**
+     * 구매 가능 수량 안내 메시지 생성
+     *
+     * @param productName 상품명
+     * @param available 구매 가능한 수량
+     * @return 구매 가능 수량 안내 예외
+     */
+    public static InsufficientStockException withAvailable(String productName, int available) {
+        if (available == 0) {
+            return outOfStock(productName);
+        }
+        return new InsufficientStockException(
+                String.format("'%s' 상품은 최대 %d개까지 구매 가능합니다.", productName, available)
+        );
     }
 }
-

@@ -1,86 +1,136 @@
 package javaproject.domain;
 
+import java.io.Serializable;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
+import java.util.Objects;
 
 /**
- * 사용자의 장바구니를 나타내는 클래스
- * 여러 상품을 담고 관리하는 기능 제공
+ * 장바구니 도메인 클래스
+ * 사용자의 장바구니 정보를 표현
+ *
+ * @author ShoppingMall Team
+ * @version 1.0
  */
-public class Cart {
-    // 장바구니 소유자 ID
+public class Cart implements Serializable {
+
+    // 직렬화 버전 UID
+    private static final long serialVersionUID = 1L;
+
+    // 장바구니 ID (고유 식별자)
+    private String id;
+
+    // 사용자 ID (장바구니 소유자)
     private String userId;
 
-    // 장바구니에 담긴 상품 목록
+    // 장바구니 항목 목록
     private List<CartItem> items;
+
+    // 생성 일시
+    private LocalDateTime createdDate;
+
+    // 수정 일시
+    private LocalDateTime modifiedDate;
+
+    // 총 금액 (계산된 값)
+    private double totalAmount;
+
+    // 총 상품 개수 (계산된 값)
+    private int totalQuantity;
 
     /**
      * 기본 생성자
      */
     public Cart() {
         this.items = new ArrayList<>();
+        this.createdDate = LocalDateTime.now();
+        this.modifiedDate = LocalDateTime.now();
+        this.totalAmount = 0;
+        this.totalQuantity = 0;
     }
 
     /**
      * 사용자 ID를 포함한 생성자
-     * @param userId 장바구니 소유자 ID
+     *
+     * @param userId 사용자 ID
      */
     public Cart(String userId) {
+        this();
         this.userId = userId;
-        this.items = new ArrayList<>();
+        this.id = generateCartId(userId);
     }
 
     /**
-     * 장바구니에 상품 추가
-     * 이미 있는 상품이면 수량 증가, 없으면 새로 추가
-     * @param product 상품
-     * @param quantity 수량
-     * @return 추가 성공 여부
+     * 전체 정보를 포함한 생성자
+     *
+     * @param id 장바구니 ID
+     * @param userId 사용자 ID
      */
-    public boolean addItem(Product product, int quantity) {
-        if (product == null || quantity <= 0) {
-            return false;
-        }
-
-        // 이미 장바구니에 있는 상품인지 확인
-        Optional<CartItem> existingItem = findItemByProductId(product.getProductId());
-
-        if (existingItem.isPresent()) {
-            // 기존 상품의 수량 증가
-            existingItem.get().increaseQuantity(quantity);
-        } else {
-            // 새 상품 추가
-            CartItem newItem = new CartItem(product, quantity);
-            items.add(newItem);
-        }
-
-        return true;
+    public Cart(String id, String userId) {
+        this();
+        this.id = id;
+        this.userId = userId;
     }
 
     /**
-     * 장바구니에서 상품 제거
+     * 장바구니 ID 생성
+     *
+     * @param userId 사용자 ID
+     * @return 생성된 장바구니 ID
+     */
+    private String generateCartId(String userId) {
+        return "CART_" + userId + "_" + System.currentTimeMillis();
+    }
+
+    /**
+     * 장바구니에 항목 추가
+     * 이미 있는 상품이면 수량 증가
+     *
+     * @param item 추가할 항목
+     */
+    public void addItem(CartItem item) {
+        if (item == null) {
+            return;
+        }
+
+        // 이미 있는 상품인지 확인
+        CartItem existingItem = findItemByProductId(item.getProductId());
+
+        if (existingItem != null) {
+            // 기존 항목의 수량 증가
+            existingItem.setQuantity(existingItem.getQuantity() + item.getQuantity());
+        } else {
+            // 새 항목 추가
+            this.items.add(item);
+        }
+
+        updateTotals();
+        this.modifiedDate = LocalDateTime.now();
+    }
+
+    /**
+     * 장바구니에서 항목 제거
+     *
+     * @param item 제거할 항목
+     */
+    public void removeItem(CartItem item) {
+        if (item != null && this.items.remove(item)) {
+            updateTotals();
+            this.modifiedDate = LocalDateTime.now();
+        }
+    }
+
+    /**
+     * 상품 ID로 항목 제거
+     *
      * @param productId 제거할 상품 ID
      * @return 제거 성공 여부
      */
-    public boolean removeItem(String productId) {
-        return items.removeIf(item -> item.getProductId().equals(productId));
-    }
-
-    /**
-     * 특정 상품의 수량 변경
-     * @param productId 상품 ID
-     * @param newQuantity 새로운 수량
-     * @return 변경 성공 여부
-     */
-    public boolean updateQuantity(String productId, int newQuantity) {
-        if (newQuantity <= 0) {
-            return removeItem(productId); // 수량이 0 이하면 제거
-        }
-
-        Optional<CartItem> item = findItemByProductId(productId);
-        if (item.isPresent()) {
-            item.get().setQuantity(newQuantity);
+    public boolean removeItemByProductId(String productId) {
+        CartItem item = findItemByProductId(productId);
+        if (item != null) {
+            removeItem(item);
             return true;
         }
         return false;
@@ -89,107 +139,213 @@ public class Cart {
     /**
      * 장바구니 비우기
      */
-    public void clear() {
-        items.clear();
+    public void clearItems() {
+        this.items.clear();
+        this.totalAmount = 0;
+        this.totalQuantity = 0;
+        this.modifiedDate = LocalDateTime.now();
+    }
+
+    /**
+     * 상품 ID로 장바구니 항목 찾기
+     *
+     * @param productId 상품 ID
+     * @return 찾은 항목, 없으면 null
+     */
+    public CartItem findItemByProductId(String productId) {
+        if (productId == null) {
+            return null;
+        }
+
+        for (CartItem item : items) {
+            if (productId.equals(item.getProductId())) {
+                return item;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 총 금액과 수량 업데이트
+     * ProductService를 통해 가격 정보를 가져와야 하므로
+     * 실제로는 Service 레이어에서 처리
+     */
+    private void updateTotals() {
+        this.totalQuantity = 0;
+        for (CartItem item : items) {
+            this.totalQuantity += item.getQuantity();
+        }
     }
 
     /**
      * 장바구니가 비어있는지 확인
+     *
      * @return 비어있으면 true
      */
     public boolean isEmpty() {
-        return items.isEmpty();
+        return items == null || items.isEmpty();
     }
 
     /**
-     * 장바구니 상품 개수 (종류)
-     * @return 상품 종류 수
+     * 장바구니 항목 개수 반환
+     *
+     * @return 항목 개수
      */
     public int getItemCount() {
         return items.size();
     }
 
+    // Getters and Setters
+
     /**
-     * 장바구니 총 수량 (모든 상품의 수량 합)
-     * @return 총 수량
+     * 장바구니 ID 반환
+     * @return 장바구니 ID
      */
-    public int getTotalQuantity() {
-        return items.stream().mapToInt(CartItem::getQuantity).sum();
+    public String getId() {
+        return id;
     }
 
     /**
-     * 장바구니 총 금액 계산
-     * @return 총 금액
+     * 장바구니 ID 설정
+     * @param id 장바구니 ID
      */
-    public int getTotalAmount() {
-        return items.stream().mapToInt(CartItem::getTotalPrice).sum();
+    public void setId(String id) {
+        this.id = id;
     }
 
     /**
-     * 총 금액을 원화 형식으로 반환
+     * 사용자 ID 반환
+     * @return 사용자 ID
      */
-    public String getFormattedTotalAmount() {
-        return String.format("%,d원", getTotalAmount());
-    }
-
-    /**
-     * 상품 ID로 장바구니 아이템 찾기
-     * @param productId 상품 ID
-     * @return 찾은 아이템 (Optional)
-     */
-    public Optional<CartItem> findItemByProductId(String productId) {
-        return items.stream()
-                .filter(item -> item.getProductId().equals(productId))
-                .findFirst();
-    }
-
-    /**
-     * 특정 상품이 장바구니에 있는지 확인
-     * @param productId 상품 ID
-     * @return 존재하면 true
-     */
-    public boolean containsProduct(String productId) {
-        return findItemByProductId(productId).isPresent();
-    }
-
-    /**
-     * 재고 확인 (모든 상품의 재고가 충분한지)
-     * @return 재고 부족한 상품이 있으면 해당 상품 ID, 모두 충분하면 null
-     */
-    public String checkStock() {
-        for (CartItem item : items) {
-            Product product = item.getProduct();
-            if (product != null && !product.hasEnoughStock(item.getQuantity())) {
-                return product.getProductId(); // 재고 부족한 첫 번째 상품 ID 반환
-            }
-        }
-        return null; // 모든 상품의 재고가 충분함
-    }
-
-    // Getter/Setter 메서드들
     public String getUserId() {
         return userId;
     }
 
+    /**
+     * 사용자 ID 설정
+     * @param userId 사용자 ID
+     */
     public void setUserId(String userId) {
         this.userId = userId;
     }
 
+    /**
+     * 장바구니 항목 목록 반환
+     * @return 항목 목록
+     */
     public List<CartItem> getItems() {
-        return new ArrayList<>(items); // 방어적 복사
+        return items;
     }
 
+    /**
+     * 장바구니 항목 목록 설정
+     * @param items 항목 목록
+     */
     public void setItems(List<CartItem> items) {
-        this.items = items != null ? new ArrayList<>(items) : new ArrayList<>();
+        this.items = items;
+        updateTotals();
     }
 
+    /**
+     * 생성 일시 반환
+     * @return 생성 일시
+     */
+    public LocalDateTime getCreatedDate() {
+        return createdDate;
+    }
+
+    /**
+     * 생성 일시 설정
+     * @param createdDate 생성 일시
+     */
+    public void setCreatedDate(LocalDateTime createdDate) {
+        this.createdDate = createdDate;
+    }
+
+    /**
+     * 수정 일시 반환
+     * @return 수정 일시
+     */
+    public LocalDateTime getModifiedDate() {
+        return modifiedDate;
+    }
+
+    /**
+     * 수정 일시 설정
+     * @param modifiedDate 수정 일시
+     */
+    public void setModifiedDate(LocalDateTime modifiedDate) {
+        this.modifiedDate = modifiedDate;
+    }
+
+    /**
+     * 총 금액 반환
+     * @return 총 금액
+     */
+    public double getTotalAmount() {
+        return totalAmount;
+    }
+
+    /**
+     * 총 금액 설정
+     * @param totalAmount 총 금액
+     */
+    public void setTotalAmount(double totalAmount) {
+        this.totalAmount = totalAmount;
+    }
+
+    /**
+     * 총 상품 개수 반환
+     * @return 총 상품 개수
+     */
+    public int getTotalQuantity() {
+        return totalQuantity;
+    }
+
+    /**
+     * 총 상품 개수 설정
+     * @param totalQuantity 총 상품 개수
+     */
+    public void setTotalQuantity(int totalQuantity) {
+        this.totalQuantity = totalQuantity;
+    }
+
+    /**
+     * 장바구니 정보를 문자열로 변환
+     *
+     * @return 장바구니 정보 문자열
+     */
     @Override
     public String toString() {
-        return "Cart{" +
-                "userId='" + userId + '\'' +
-                ", itemCount=" + getItemCount() +
-                ", totalQuantity=" + getTotalQuantity() +
-                ", totalAmount=" + getTotalAmount() +
-                '}';
+        return String.format(
+                "Cart{id='%s', userId='%s', itemCount=%d, totalQuantity=%d}",
+                id, userId, items.size(), totalQuantity
+        );
+    }
+
+    /**
+     * 객체 동등성 비교
+     *
+     * @param obj 비교할 객체
+     * @return 동일한 장바구니면 true
+     */
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) return true;
+        if (obj == null || getClass() != obj.getClass()) return false;
+
+        Cart cart = (Cart) obj;
+        return Objects.equals(id, cart.id) &&
+                Objects.equals(userId, cart.userId);
+    }
+
+    /**
+     * 해시코드 생성
+     *
+     * @return 해시코드
+     */
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, userId);
     }
 }

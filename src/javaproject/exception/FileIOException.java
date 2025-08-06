@@ -1,63 +1,56 @@
+// =================================================================
+// FileIOException.java - 파일 입출력 예외 클래스
+// =================================================================
 package javaproject.exception;
 
-import java.io.IOException;
-
 /**
- * 파일 입출력 과정에서 발생하는 예외
- * 데이터 저장/로드 시 사용
+ * 파일 입출력 중 발생하는 예외 클래스
+ * 파일 읽기/쓰기 실패 시 사용
  */
 public class FileIOException extends Exception {
 
-    // 파일 경로
-    private String filePath;
-
-    // 원본 IOException
-    private IOException originalException;
+    // 관련 파일명
+    private String fileName;
 
     /**
      * 기본 생성자
-     */
-    public FileIOException() {
-        super("파일 입출력 중 오류가 발생했습니다.");
-    }
-
-    /**
-     * 메시지를 포함한 생성자
      * @param message 예외 메시지
+     * @param cause 원인 예외
      */
-    public FileIOException(String message) {
-        super(message);
+    public FileIOException(String message, Throwable cause) {
+        super(message, cause);
     }
 
     /**
-     * 파일 경로와 원본 예외를 포함한 생성자
-     * @param filePath 파일 경로
-     * @param originalException 원본 IOException
-     */
-    public FileIOException(String filePath, IOException originalException) {
-        super("파일 입출력 중 오류가 발생했습니다. 파일: " + filePath + ", 원인: " + originalException.getMessage());
-        this.filePath = filePath;
-        this.originalException = originalException;
-    }
-
-    /**
-     * 상세 정보를 포함한 생성자
-     * @param filePath 파일 경로
+     * 파일명을 포함한 생성자
+     * @param fileName 파일명
      * @param message 예외 메시지
-     * @param originalException 원본 IOException
+     * @param cause 원인 예외
      */
-    public FileIOException(String filePath, String message, IOException originalException) {
-        super(message);
-        this.filePath = filePath;
-        this.originalException = originalException;
+    public FileIOException(String fileName, String message, Throwable cause) {
+        super(message, cause);
+        this.fileName = fileName;
     }
 
-    // Getter 메서드들
-    public String getFilePath() {
-        return filePath;
+    /**
+     * 파일명 반환
+     * @return 파일명
+     */
+    public String getFileName() {
+        return fileName;
     }
 
-    public IOException getOriginalException() {
-        return originalException;
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("FileIOException: ");
+
+        if (fileName != null) {
+            sb.append("[파일: ").append(fileName).append("] ");
+        }
+
+        sb.append(getMessage());
+
+        return sb.toString();
     }
 }
